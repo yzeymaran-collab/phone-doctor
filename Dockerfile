@@ -6,8 +6,8 @@ WORKDIR /app
 COPY package*.json ./
 COPY server/package*.json ./server/
 
-# Install root dependencies
-RUN npm ci --omit=dev
+# Install root dependencies (none needed, but run for safety)
+RUN npm install --omit=dev --no-save
 
 # Install server dependencies
 RUN cd server && npm ci --omit=dev && cd ..
