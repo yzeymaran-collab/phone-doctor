@@ -1,0 +1,16 @@
+{
+  "name": "phone-doctor",
+  "version": "1.0.0",
+  "description": "Phone Doctor - Device Management System",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "cd server && node index.js",
+    "dev": "cd server && npm start"
+  },
+  "keywords": ["phone", "repair", "management"],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": "18.x"
+  }
+}
