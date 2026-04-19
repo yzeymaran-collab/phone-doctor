@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auftragsstatus · Phone-dr</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+* { box-sizing: border-box; }
+body { font-family: system-ui,-apple-system,sans-serif; background: #f8fafc; margin: 0; min-height: 100vh; }
+.card { background:#fff; border-radius:16px; box-shadow:0 2px 12px rgba(0,0,0,.07); border:1px solid #f1f5f9; }
+.btn { display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all .15s; }
+.btn-primary { background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;box-shadow:0 4px 12px rgba(99,102,241,.3); }
+.btn-primary:hover { transform:translateY(-1px); }
+.btn-wa { background:#25D366;color:#fff; }
+.btn-wa:hover { background:#20ba56; }
+input { width:100%;padding:11px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:15px;outline:none;transition:border .15s; }
+input:focus { border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12); }
+
+.timeline { position:relative; padding-left:28px; }
+.timeline::before { content:'';position:absolute;left:11px;top:8px;bottom:8px;width:2px;background:#f1f5f9; }
+.tl-step { position:relative;margin-bottom:20px;display:flex;align-items:flex-start;gap:14px; }
+.tl-dot { width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:-28px;position:relative;z-index:1;font-size:11px;font-weight:800; }
+.tl-dot.done   { background:#22c55e;color:#fff; }
+.tl-dot.active { background:#6366f1;color:#fff;box-shadow:0 0 0 4px rgba(99,102,241,.2); }
+.tl-dot.todo   { background:#f1f5f9;color:#94a3b8;border:2px solid #e2e8f0; }
+</style>
+</head>
+<body>
+<div style="max-width:560px;margin:0 auto;padding:24px 16px;">
+  <!-- Header -->
+  <div style="text-align:center;padding:32px 0 28px;">
+    <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:24px;box-shadow:0 8px 24px rgba(99,102,241,.3);">📱</div>
+    <div style="font-size:24px;font-weight:900;color:#0f172a;">Phone-dr</div>
+    <div style="font-size:14px;color:#64748b;margin-top:4px;">Reparatur-Status</div>
+  </div>
+
+  <!-- Search form -->
+  <div class="card" style="padding:24px;margin-bottom:20px;" id="search-card">
+    <div style="font-size:16px;font-weight:800;color:#0f172a;margin-bottom:4px;">Auftrag nachverfolgen</div>
+    <div style="font-size:13px;color:#64748b;margin-bottom:18px;">Auftragsnummer eingeben (z.B. 42)</div>
+    <div style="display:flex;gap:10px;">
+      <input type="number" id="search-id" placeholder="Auftragsnummer" min="1" style="flex:1;" onkeydown="if(event.key==='Enter')loadStatus()">
+      <button class="btn btn-primary" onclick="loadStatus()">
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="11" cy="11" r="8" stroke-width="2"/><path d="m21 21-4.35-4.35" stroke-width="2"/></svg>
+        Suchen
+      </button>
+    </div>
+    <div id="search-error" style="display:none;margin-top:10px;padding:10px 14px;background:#fef2f2;border:1px solid #fee2e2;border-radius:8px;color:#dc2626;font-size:13.5px;font-weight:500;"></div>
+  </div>
+
+  <!-- Result -->
+  <div id="result-area" style="display:none;"></div>
+</div>
+
+<script>
+const STATUS_ORDER = ['Offen','In Bearbeitung','Wartet auf Teile','Fertig','Abgeholt'];
+const STATUS_ICONS = { 'Offen':'📋','In Bearbeitung':'🔧','Wartet auf Teile':'📦','Fertig':'✅','Abgeholt':'🎉','Storniert':'❌' };
+const STATUS_DESC  = {
+  'Offen':             'Ihr Auftrag wurde erfasst und wartet auf Bearbeitung.',
+  'In Bearbeitung':    'Unser Techniker arbeitet gerade an Ihrem Gerät.',
+  'Wartet auf Teile':  'Wir warten auf Ersatzteile. Wir informieren Sie sobald die Teile eingetroffen sind.',
+  'Fertig':            'Ihr Gerät ist fertig repariert! Sie können es jetzt abholen.',
+  'Abgeholt':          'Ihr Gerät wurde erfolgreich abgeholt. Vielen Dank!',
+  'Storniert':         'Dieser Auftrag wurde storniert.',
+};
+const fmtDate = d => d ? new Date(d).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+const fmt = n => n!=null ? Number(n).toLocaleString('de-DE',{style:'currency',currency:'EUR'}) : null;
+
+async function loadStatus() {
+  const id = document.getElementById('search-id').value.trim();
+  const errEl = document.getElementById('search-error');
+  errEl.style.display = 'none';
+  if (!id) { errEl.textContent='Bitte Auftragsnummer eingeben.'; errEl.style.display=''; return; }
+  try {
+    const res = await fetch(`/api/status/${id}`);
+    if (!res.ok) { const e=await res.json(); throw new Error(e.message||'Nicht gefunden'); }
+    const r = await res.json();
+    renderStatus(r);
+  } catch (e) {
+    errEl.textContent = e.message; errEl.style.display = '';
+    document.getElementById('result-area').style.display = 'none';
+  }
+}
+
+function renderStatus(r) {
+  const rListe = Array.isArray(r.reparatur_liste) ? r.reparatur_liste : [];
+  const statusIdx = STATUS_ORDER.indexOf(r.status);
+  const isCancelled = r.status === 'Storniert';
+
+  const timelineHtml = STATUS_ORDER.map((s,i) => {
+    const state = isCancelled ? 'todo' : i < statusIdx ? 'done' : i === statusIdx ? 'active' : 'todo';
+    return `<div class="tl-step">
+      <div class="tl-dot ${state}">${state==='done'?'✓':i+1}</div>
+      <div>
+        <div style="font-size:14px;font-weight:${state==='active'?'800':'600'};color:${state==='active'?'#0f172a':state==='done'?'#64748b':'#94a3b8'};">${STATUS_ICONS[s]} ${s}</div>
+        ${state==='active'?`<div style="font-size:12.5px;color:#64748b;margin-top:2px;">${STATUS_DESC[s]}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const statusColor = {
+    'Offen':'#f59e0b','In Bearbeitung':'#6366f1','Wartet auf Teile':'#8b5cf6',
+    'Fertig':'#22c55e','Abgeholt':'#34d399','Storniert':'#ef4444'
+  }[r.status] || '#94a3b8';
+
+  document.getElementById('result-area').innerHTML = `
+    <!-- Status Hero -->
+    <div class="card" style="padding:24px;margin-bottom:16px;border-top:4px solid ${statusColor};">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+        <div style="width:52px;height:52px;border-radius:14px;background:${statusColor}18;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">${STATUS_ICONS[r.status]||'📋'}</div>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;">Auftrag #${r.id}</div>
+          <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:2px;">${r.kunden_name}</div>
+        </div>
+        <div style="margin-left:auto;text-align:right;">
+          <div style="display:inline-flex;align-items:center;gap:5px;padding:5px 14px;border-radius:99px;font-size:12.5px;font-weight:800;background:${statusColor}18;color:${statusColor};">
+            <span style="width:7px;height:7px;border-radius:50%;background:${statusColor};"></span>
+            ${r.status}
+          </div>
+        </div>
+      </div>
+      <div style="background:#f8fafc;border-radius:10px;padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div><div style="font-size:11px;color:#94a3b8;font-weight:700;margin-bottom:2px;">GERÄT</div><div style="font-size:13.5px;font-weight:700;color:#1e293b;">${[r.hersteller,r.modell].filter(Boolean).join(' ')||'—'}</div></div>
+        <div><div style="font-size:11px;color:#94a3b8;font-weight:700;margin-bottom:2px;">ABHOLUNG</div><div style="font-size:13.5px;font-weight:700;color:${r.abholtermin&&new Date(r.abholtermin)<new Date()&&r.status!=='Fertig'&&r.status!=='Abgeholt'?'#dc2626':'#1e293b'};">${fmtDate(r.abholtermin)}</div></div>
+        ${r.kostenvoranschlag!=null?`<div><div style="font-size:11px;color:#94a3b8;font-weight:700;margin-bottom:2px;">KOSTENVORANSCHLAG</div><div style="font-size:13.5px;font-weight:700;color:#1e293b;">${fmt(r.kostenvoranschlag)}</div></div>`:''}
+        <div><div style="font-size:11px;color:#94a3b8;font-weight:700;margin-bottom:2px;">ANGENOMMEN AM</div><div style="font-size:13.5px;font-weight:700;color:#1e293b;">${fmtDate(r.created_at)}</div></div>
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    ${!isCancelled?`<div class="card" style="padding:24px;margin-bottom:16px;">
+      <div style="font-size:14px;font-weight:800;color:#0f172a;margin-bottom:18px;">📍 Reparaturfortschritt</div>
+      <div class="timeline">${timelineHtml}</div>
+    </div>`:`<div class="card" style="padding:20px;margin-bottom:16px;border-left:4px solid #ef4444;">
+      <div style="color:#dc2626;font-weight:700;">❌ Dieser Auftrag wurde storniert.</div>
+    </div>`}
+
+    <!-- Repairs -->
+    ${rListe.length?`<div class="card" style="padding:20px;margin-bottom:16px;">
+      <div style="font-size:14px;font-weight:800;color:#0f172a;margin-bottom:12px;">🔧 Reparaturen (${rListe.length})</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">${rListe.map(i=>`<span style="background:#eef2ff;color:#4338ca;font-size:12px;padding:4px 12px;border-radius:99px;font-weight:600;border:1px solid #c7d2fe;">${i}</span>`).join('')}</div>
+    </div>`:''}
+
+    <!-- Schaden -->
+    ${r.schadenbeschreibung?`<div class="card" style="padding:20px;margin-bottom:16px;">
+      <div style="font-size:12px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Schadensbeschreibung</div>
+      <div style="font-size:14px;color:#334155;">${r.schadenbeschreibung}</div>
+    </div>`:''}
+
+    <!-- Contact -->
+    <div class="card" style="padding:20px;text-align:center;">
+      <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:4px;">Fragen zu Ihrem Auftrag?</div>
+      <div style="font-size:13px;color:#64748b;margin-bottom:16px;">Wir helfen Ihnen gerne weiter</div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <a href="https://wa.me/?text=${encodeURIComponent('Hallo, ich habe eine Frage zu meinem Reparaturauftrag #'+r.id)}" target="_blank" class="btn btn-wa">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          Per WhatsApp kontaktieren
+        </a>
+      </div>
+    </div>
+
+    <!-- Back -->
+    <div style="text-align:center;margin-top:16px;">
+      <button onclick="document.getElementById('result-area').style.display='none';document.getElementById('search-id').value='';" style="background:none;border:none;color:#94a3b8;font-size:13px;cursor:pointer;font-weight:500;">← Andere Auftragsnummer eingeben</button>
+    </div>
+  `;
+  document.getElementById('result-area').style.display = '';
+  // Auto-scroll to result
+  document.getElementById('result-area').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// Auto-load from URL param
+const urlId = new URLSearchParams(location.search).get('id');
+if (urlId) { document.getElementById('search-id').value = urlId; loadStatus(); }
+</script>
+</body>
+</html>
