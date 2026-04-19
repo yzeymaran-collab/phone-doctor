@@ -5,11 +5,12 @@ WORKDIR /app
 # Copy ALL files first (includes package.json files)
 COPY . .
 
-# List what we have (for debugging)
-RUN ls -la && ls -la server/
-
 # Install server dependencies
-RUN cd server && npm install --omit=dev && cd ..
+WORKDIR /app/server
+RUN npm install --omit=dev
+
+# Go back to root
+WORKDIR /app
 
 # Expose port (Railway will set PORT environment variable)
 EXPOSE 3000
