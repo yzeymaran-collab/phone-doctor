@@ -2,18 +2,14 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-COPY server/package*.json ./server/
+# Copy ALL files first (includes package.json files)
+COPY . .
 
-# Install root dependencies (none needed, but run for safety)
-RUN npm install --omit=dev --no-save
+# List what we have (for debugging)
+RUN ls -la && ls -la server/
 
 # Install server dependencies
-RUN cd server && npm ci --omit=dev && cd ..
-
-# Copy all source files
-COPY . .
+RUN cd server && npm install --omit=dev && cd ..
 
 # Expose port (Railway will set PORT environment variable)
 EXPOSE 3000
