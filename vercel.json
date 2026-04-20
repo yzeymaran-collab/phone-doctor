@@ -1,11 +1,10 @@
 {
   "version": 2,
+  "buildCommand": "npm install",
   "public": true,
-  "buildCommand": "cd server && npm install && cd ..",
-  "outputDirectory": ".",
   "functions": {
     "server/index.js": {
-      "runtime": "nodejs24.x"
+      "runtime": "@vercel/node@3.x"
     }
   },
   "routes": [
