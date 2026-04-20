@@ -1350,15 +1350,21 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'hardware-verwaltung.html'));
 });
 
-// ─── Server starten ──────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log('');
-  console.log('  ╔═══════════════════════════════════════╗');
-  console.log('  ║   phone doctor Verwaltungssystem        ║');
-  console.log(`  ║   http://localhost:${PORT}                ║`);
-  console.log('  ╠═══════════════════════════════════════╣');
-  console.log('  ║   Standard-Login: superadmin          ║');
-  console.log('  ║   Passwort:       admin123            ║');
-  console.log('  ╚═══════════════════════════════════════╝');
-  console.log('');
-});
+// ─── Server starten / Export für Vercel ──────────────────────────────────────
+// For Vercel serverless
+module.exports = app;
+
+// Local development
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log('');
+    console.log('  ╔═══════════════════════════════════════╗');
+    console.log('  ║   phone doctor Verwaltungssystem        ║');
+    console.log(`  ║   http://localhost:${PORT}                ║`);
+    console.log('  ╠═══════════════════════════════════════╣');
+    console.log('  ║   Standard-Login: superadmin          ║');
+    console.log('  ║   Passwort:       admin123            ║');
+    console.log('  ╚═══════════════════════════════════════╝');
+    console.log('');
+  });
+}
