@@ -8,6 +8,9 @@
     "dev": "cd server && npm start",
     "postinstall": "cd server && npm install"
   },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
   "keywords": ["phone", "repair", "management"],
   "author": "",
   "license": "ISC",
